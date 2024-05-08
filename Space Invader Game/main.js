@@ -13,6 +13,7 @@ document.body.appendChild(renderer.domElement);
 const controls = new OrbitControls(camera, renderer.domElement);
 
 let score = 0; // Initial score
+let gameRunning = true; // State of the game loop
 
 function updateScore(points) {
     score += points; // Update score by points
@@ -43,7 +44,7 @@ const blocks = [];
 const aliens = [];
 const lasers= [];
 
-const blockPositions = [-4, -2, 0, 2, 4 ]; // Example positions for blocks along the x-axis
+const blockPositions = [-5, -3, -1, 1, 3, 5 ]; // Example positions for blocks along the x-axis
 blockPositions.forEach(x => {
   const block = createBlockShape(x, 0, 0); // Keeping y constant for a straight line, adjust as needed
   scene.add(block);
@@ -51,77 +52,44 @@ blockPositions.forEach(x => {
 });
 
 
-// Function to create an block shape
 function createBlockShape(x, y, z) {
-  const points = [];
-  points.push(new THREE.Vector3(-0.3, -1.7, 0)); // A
-  points.push(new THREE.Vector3(0.3, -1.7, 0)); //  B
-  points.push(new THREE.Vector3(0.6, -1.85, 0)); //  C
-  points.push(new THREE.Vector3(0.6, -2.15, 0)); //  D
-  points.push(new THREE.Vector3(0.3, -2.15, 0)); //  E
-  points.push(new THREE.Vector3(0.3, -2.075, 0)); //  F
-  points.push(new THREE.Vector3(-0.3, -2.075, 0)); // g
-  points.push(new THREE.Vector3(-0.3, -2.15, 0)); // h
-  points.push(new THREE.Vector3(-0.6, -2.15, 0)); // i
-  points.push(new THREE.Vector3(-0.6, -1.85, 0 )); // j
-  points.push(new THREE.Vector3(-0.3, -1.7, 0)); // a
-  
-  const shape = new THREE.Shape(points);
-  const geometry = new THREE.ShapeGeometry(shape);
-  const material = new THREE.MeshBasicMaterial({ color: 0xaacc00, side: THREE.DoubleSide });
-  const block = new THREE.Mesh(geometry, material);
-  
-  block.position.x = x;
-  block.position.y = y;
-  block.position.z = z;
-  
-  return block;
-  }
+  // Create a shape
+  const shape = new THREE.Shape();
+  shape.moveTo(-0.3, -1.7); // Move to the first point
+  shape.lineTo(0.3, -1.7);  // Line to the next point
+  shape.lineTo(0.6, -1.85);
+  shape.lineTo(0.6, -2.15);
+  shape.lineTo(0.3, -2.15);
+  shape.lineTo(0.3, -2.075);
+  shape.lineTo(-0.3, -2.075);
+  shape.lineTo(-0.3, -2.15);
+  shape.lineTo(-0.6, -2.15);
+  shape.lineTo(-0.6, -1.85);
+  shape.lineTo(-0.3, -1.7); // Close the path
 
-function createLaser() {
-  const geometry = new THREE.SphereGeometry(0.08,32,16); // Small sphere as laser
-  const material = new THREE.MeshBasicMaterial({ color: 0xff0000 }); // Red color
-  const laser = new THREE.Mesh(geometry, material);
-  laser.rotation.x = Math.PI / 2; // Orient the cylinder to point out of the cannon
-  return laser;
-}
-
-// Function to start automatic shooting
-function startAutomaticShooting() {
-  const shootingInterval = 200; // Time in milliseconds between shots, e.g., 1000ms = 1 second
-
-  setInterval(() => {
-      shootLaser();
-  }, shootingInterval);
-}
-
-// Ensure this function is called after the cannon and scene have been initialized
-startAutomaticShooting();
-
-function shootLaser() {
-  const laser = createLaser();
-  laser.position.set(cannon.position.x, cannon.position.y-2.5); // Assume cannon's current position
-
-  scene.add(laser);
-  lasers.push(laser);
-
-  // Define the movement of the laser
-  const speed = 5; // Adjust speed as needed
-  const laserMovement = () => {
-      laser.position.y += speed * 0.05; // Example: move upwards
-
-      // Remove the laser if it goes out of bounds
-      if (laser.position.y > 10) { // Example: boundary check
-          scene.remove(laser); // Remove laser from the scene
-      } else {
-          requestAnimationFrame(laserMovement); // Continue moving the laser
-      }
+  // Define extrusion settings
+  const extrudeSettings = {
+    steps: 1,
+    depth: 0.2,  // Define the depth of the extrusion
+    bevelEnabled: false  // No bevel for simplicity
   };
 
-  requestAnimationFrame(laserMovement); // Start moving the laser
+  // Extrude the shape to create a 3D geometry
+  const geometry = new THREE.ExtrudeGeometry(shape, extrudeSettings);
+
+  // Material
+  const material = new THREE.MeshBasicMaterial({ color: 0x36a0a9, side: THREE.DoubleSide });
+
+  // Create a mesh
+  const block = new THREE.Mesh(geometry, material);
+
+  // Position the block
+  block.position.set(x, y, z);
+
+  return block;
 }
 
-const cannon = createCannonShape(0,0,0);
+  const cannon = createCannonShape(0,-4,0);
   // Cannon movement
   function moveCannon(event) {
     if (event.key === 'ArrowLeft') {
@@ -139,70 +107,182 @@ const cannon = createCannonShape(0,0,0);
       shootLaser();
     }
   }
+
+function createLaser() {
+  const geometry = new THREE.SphereGeometry(0.08,32,16); // Small sphere as laser
+  const material = new THREE.MeshBasicMaterial({ color: 0x22c1dd }); // Red color
+  const laser = new THREE.Mesh(geometry, material);
+  laser.userData.type = 'cannon'; // Identify as cannon laser
+  laser.rotation.x = Math.PI / 2; // Orient the cylinder to point out of the cannon
+  return laser;
+}
+
+function createAlienLaser(x, y, z) {
+  const geometry = new THREE.SphereGeometry(0.08, 32, 16); // Small sphere as laser
+  const material = new THREE.MeshBasicMaterial({ color: 0xff0000 }); // Red color
+  const laser = new THREE.Mesh(geometry, material);
+  laser.userData.type = 'alien'; // Identify as alien laser
+  laser.position.set(x, y - 0.2, z); // Position slightly below the alien
+  return laser;
+}
+
+// Function to start automatic shooting
+function startAutomaticShooting() {
+  const shootingInterval = 300; // 
+
+  setInterval(() => {
+      shootLaser();
+  }, shootingInterval);
+}
+// Ensure this function is called after the cannon and scene have been initialized
+startAutomaticShooting();
+
+function startAlienShooting() {
+  const shootingInterval = 300; // Alien shoots every 1000 ms (1 second)
+
+  setInterval(() => {
+    if (aliens.length > 0) {
+      const randomIndex = Math.floor(Math.random() * aliens.length);
+      const randomAlien = aliens[randomIndex];
+      const laser = createAlienLaser(randomAlien.position.x, randomAlien.position.y, randomAlien.position.z);
+      scene.add(laser);
+      lasers.push(laser);
+
+      // Move this laser downward
+      const moveAlienLaser = () => {
+        laser.position.y -= 0.1; // Move the laser downward
+
+        if (laser.position.y < -10) { // Adjust based on the scene size
+          scene.remove(laser);
+        } else {
+          requestAnimationFrame(moveAlienLaser);
+        }
+      };
+
+      requestAnimationFrame(moveAlienLaser);
+    }
+  }, shootingInterval);
+}
+
+startAlienShooting();
+
+function shootLaser() {
+  const laser = createLaser();
+  
+  // 'extrudeDepth' is the depth you used in the cannon's ExtrudeGeometry, need to adjust based on your cannon's design
+  const extrudeDepth = 0.2;
+  
+  laser.position.set(
+      cannon.position.x,
+      cannon.position.y + (0.1 + extrudeDepth),
+      cannon.position.z
+  );
+
+  // Add the laser to the scene and track it in the lasers array
+  scene.add(laser);
+  lasers.push(laser);
+
+  // Define the movement of the laser
+  const speed = 1; // Adjust speed as needed
+  const laserMovement = () => {
+      laser.position.y += speed * 0.05; // positive y-direction is 'forward'
+
+      // Remove the laser if it goes out of bounds
+      if (laser.position.y < -10) { // Adjust according to your scene's size
+          scene.remove(laser);
+      } else {
+          requestAnimationFrame(laserMovement); // Continue moving the laser
+      }
+  };
+
+  requestAnimationFrame(laserMovement); // Start moving the laser
+}
+
+
   
   document.addEventListener('keydown', moveCannon);
   // adding the cannon 
   scene.add(cannon);
 
-// Function to create an cannon shape
-function createCannonShape(x, y,z) {
-  const points = [];
-  points.push(new THREE.Vector3(0, -2.85, 0)); // Top of the head A
-  points.push(new THREE.Vector3(0.075, -2.925, 0 )); // Right head B
-  points.push(new THREE.Vector3(0.075,-3, 0)); // Right body C
-  points.push(new THREE.Vector3(0.3, -3, 0)); // Bottom D
-  points.push(new THREE.Vector3(0.3, -3.30, 0)); // Left body E
-  points.push(new THREE.Vector3(-0.3, -3.30, 0)); // Left head F
-  points.push(new THREE.Vector3(-0.3, -3, 0)); // g
-  points.push(new THREE.Vector3(-0.075, -3, 0)); // h
-  points.push(new THREE.Vector3(-0.075, -2.925, 0)); // i
-  points.push(new THREE.Vector3(0, -2.85, 0)); // a
-  
-  const shape = new THREE.Shape(points);
-  const geometry = new THREE.ShapeGeometry(shape);
-  const material = new THREE.MeshBasicMaterial({ color: 0xc8b6ff, side: THREE.DoubleSide });
-  const cannon = new THREE.Mesh(geometry, material);
-  
-  cannon.position.x = x;
-  cannon.position.y = y;
-  cannon.position.z = z;
-  
-  return cannon;
-  }
+function createCannonShape(x, y, z) {
+    const shape = new THREE.Shape();
+    // Define the 2D profile of the cannon
+    shape.moveTo(0, 0);
+    shape.lineTo(0.075, -0.075);
+    shape.lineTo(0.075, -0.15);
+    shape.lineTo(0.3, -0.15);
+    shape.lineTo(0.3, -0.45);
+    shape.lineTo(-0.3, -0.45);
+    shape.lineTo(-0.3, -0.15);
+    shape.lineTo(-0.075, -0.15);
+    shape.lineTo(-0.075, -0.075);
+    shape.lineTo(0, 0);
 
-  // Function to create an ALIEN shape
-  function createAlienShape(x, y , z) {
-   const points = [];
-   points.push(new THREE.Vector3(0.5,0.6, 0 ));  //A
-   points.push(new THREE.Vector3(0.8,0.6, 0)); //B
-   points.push(new THREE.Vector3(1  ,0.4, 0)); //  C
-   points.push(new THREE.Vector3(1  ,0.1, 0)); // D
-   points.push(new THREE.Vector3(0.9,0.1, 0)); //  E
-   points.push(new THREE.Vector3(0.9,0.3, 0)); // F
-   points.push(new THREE.Vector3(0.8,0.3, 0)); // g
-   points.push(new THREE.Vector3(0.8,0.1, 0)); // h
-   points.push(new THREE.Vector3(0.7,0.1, 0)); // i
-   points.push(new THREE.Vector3(0.7,0.3, 0)); // j
-   points.push(new THREE.Vector3(0.6,0.3, 0)); // k
-   points.push(new THREE.Vector3(0.6,0.1, 0)); // k
-   points.push(new THREE.Vector3(0.5,0.1, 0)); // l
-   points.push(new THREE.Vector3(0.5,0.3, 0)); // m
-   points.push(new THREE.Vector3(0.4,0.3, 0)); // n
-   points.push(new THREE.Vector3(0.4,0.1, 0)); // o
-   points.push(new THREE.Vector3(0.3,0.1, 0)); // p
-   points.push(new THREE.Vector3(0.3,0.4, 0)); // q
-   points.push(new THREE.Vector3(0.5,0.6, 0 )); //A
-  
-   const shape = new THREE.Shape(points);
-   const geometry = new THREE.ShapeGeometry(shape);
-   const material = new THREE.MeshBasicMaterial({ color: 0x7251b5, side: THREE.DoubleSide });
-   const alien = new THREE.Mesh(geometry, material);
-   
-   alien.position.x = x;
-   alien.position.y = y;
-   alien.position.z = z;
-   return alien;
-   }
+    // Define the extrusion settings
+    const extrudeSettings = {
+        steps: 2, // Number of points used for subdividing segments along the depth of the extrusion
+        depth: 0.3, // Depth of the extrusion (making it 3D)
+        bevelEnabled: true, // Whether to bevel the edges
+        bevelThickness: 0.01, // Thickness of the bevel
+        bevelSize: 0.02, // How far the bevel extends
+        bevelSegments: 1 // Number of segments for the bevel
+    };
+
+    // Create the geometry by extruding the shape
+    const geometry = new THREE.ExtrudeGeometry(shape, extrudeSettings);
+
+    // Apply a material
+    const material = new THREE.MeshPhongMaterial({ color: 0x925f44, side: THREE.DoubleSide });
+
+    // Create the mesh object
+    const cannon = new THREE.Mesh(geometry, material);
+    cannon.position.set(x, y, z);
+
+    return cannon;
+}
+
+function createAlienShape(x, y, z) {
+  // Create a shape using points defined
+  const shape = new THREE.Shape();
+  shape.moveTo(0.5, 0.6);
+  shape.lineTo(0.8, 0.6);
+  shape.lineTo(1.0, 0.4);
+  shape.lineTo(1.0, 0.1);
+  shape.lineTo(0.9, 0.1);
+  shape.lineTo(0.9, 0.3);
+  shape.lineTo(0.8, 0.3);
+  shape.lineTo(0.8, 0.1);
+  shape.lineTo(0.7, 0.1);
+  shape.lineTo(0.7, 0.3);
+  shape.lineTo(0.6, 0.3);
+  shape.lineTo(0.6, 0.1);
+  shape.lineTo(0.5, 0.1);
+  shape.lineTo(0.5, 0.3);
+  shape.lineTo(0.4, 0.3);
+  shape.lineTo(0.4, 0.1);
+  shape.lineTo(0.3, 0.1);
+  shape.lineTo(0.3, 0.4);
+  shape.closePath();
+
+  // Define the extrusion settings
+  const extrudeSettings = {
+      steps: 1,  // number of points used for subdividing segments along the depth
+      depth: 0.2,  // depth of the extrusion
+      bevelEnabled: false  // disable bevel to keep the alien shape sharp
+  };
+
+  // Create a 3D geometry by extruding the shape
+  const geometry = new THREE.ExtrudeGeometry(shape, extrudeSettings);
+
+  // Material
+  const material = new THREE.MeshPhongMaterial({ color: 0x00ff00, side: THREE.DoubleSide });
+
+  // Create a mesh with the geometry and material
+  const alien = new THREE.Mesh(geometry, material);
+  alien.position.set(x, y, z);
+
+  return alien;
+}
 
 // Function to add a grid of aliens
 function addAlienGrid(rows, cols, startX, startY, spacingX, spacingY) {
@@ -222,6 +302,8 @@ addAlienGrid(4,6, -5, 4, 1, 0.7);
 
 let alienSpeed = 0.05;
 let alienDirection = 1;
+
+
   function createHorizontalLine() {
     const material = new THREE.MeshBasicMaterial({ color: 0x006d77 });
     const borderHeight = 0.1; // Height of the border, adjust as needed
@@ -230,7 +312,7 @@ let alienDirection = 1;
     const geometry = new THREE.BoxGeometry(borderWidth, borderHeight, 0);
     const border = new THREE.Mesh(geometry, material);
   
-    border.position.set(0, -3.5, 0); // Position the border as needed
+    border.position.set(0, -5, 0); // Position the border as needed
   
     return border;
   }
@@ -245,40 +327,111 @@ scene.add(line);
 
 
 function animate() {
+
+  if (!gameRunning) return; // Stop the animation loop if game is not running
+
     requestAnimationFrame(animate);
-
     // Update each alien's position
-  aliens.forEach(alien => {
-    alien.position.x += alienSpeed * alienDirection;
-  });
+    aliens.forEach(alien => {
+      alien.position.x += alienSpeed * alienDirection;
+    });
 
-  // Change direction if any alien reaches the horizontal boundaries
-  if (aliens.some(alien => alien.position.x > 6 || alien.position.x < -7)) {
-    alienDirection *= -1;
-  }
-
+    // Change direction if any alien reaches the horizontal boundaries
+    if (aliens.some(alien => alien.position.x > 6 || alien.position.x < -7)) {
+      alienDirection *= -1;
+    }
     checkCollisionForAlien();
+    checkCollisionForCannon();
     checkColliaionForBlock();
-
     renderer.render(scene, camera);
 }
 
+function gameWon() {
+  gameRunning = false; // Stop the game
+  const winText = document.createElement('div');
+  winText.style.position = 'absolute';
+  winText.style.top = '50%';
+  winText.style.left = '50%';
+  winText.style.transform = 'translate(-50%, -50%)';
+  winText.style.color = 'white';
+  winText.style.fontSize = '40px';
+  winText.style.zIndex = '1000';
+  winText.innerHTML = `Congratulations! You won!  <br>Final Score: ${score}`;
+  document.body.appendChild(winText);
+}
+
+function gameOver() {
+  gameRunning = false; // Stop the game from running
+  renderer.setAnimationLoop(null); // Stop the animation loop
+
+  const gameOverText = document.createElement('div');
+  gameOverText.style.position = 'absolute';
+  gameOverText.style.top = '50%';
+  gameOverText.style.left = '50%';
+  gameOverText.style.transform = 'translate(-50%, -50%)';
+  gameOverText.style.color = 'white';
+  gameOverText.style.fontSize = '40px';
+  gameOverText.style.zIndex = '1000';
+  gameOverText.innerHTML = `Game Over! Try Again? <br> Score: ${score}`;
+  document.body.appendChild(gameOverText);
+
+  const restartButton = document.createElement('button');
+  restartButton.innerText = 'Restart';
+  restartButton.style.position = 'absolute';
+  restartButton.style.top = '60%';
+  restartButton.style.left = '50%';
+  restartButton.style.transform = 'translate(-50%, -50%)';
+  restartButton.style.fontSize = '20px';
+  restartButton.style.padding = '10px';
+  restartButton.style.cursor = 'pointer';
+  restartButton.onclick = () => location.reload(); // Reload the page to restart the game
+  document.body.appendChild(restartButton);
+}
+
 function checkCollisionForAlien() {
-  for (let i = 0; i < lasers.length; i++)
-  {
+  let removeIndices = [];
+  for (let i = 0; i < lasers.length; i++) {
     const laserBox = new THREE.Box3().setFromObject(lasers[i]);
-    for (let j = 0; j < aliens.length; j++) {
-      const alienBox = new THREE.Box3().setFromObject(aliens[j]);
-      if (laserBox.intersectsBox(alienBox)) 
-      {
-          console.log("Collision detected with object", j);
-          //scene.remove(aliens[j]);
-          scene.remove(lasers[i]);
-          lasers.splice(i,1);
+    if (lasers[i].userData.type === 'cannon') { // Check if laser is from cannon
+      for (let j = 0; j < aliens.length; j++) {
+        const alienBox = new THREE.Box3().setFromObject(aliens[j]);
+        if (laserBox.intersectsBox(alienBox)) {
+          console.log("Collision detected with alien", j);
+          scene.remove(aliens[j]);
+          aliens.splice(j, 1);
+          j--;
+          removeIndices.push(i);
           updateScore(10);
+          break;
+        }
       }
     }
-    
+  }
+  // Remove lasers that hit aliens
+  for (let index of removeIndices.reverse()) {
+    scene.remove(lasers[index]);
+    lasers.splice(index, 1);
+  }
+  // Check if there are no more aliens left and declare victory
+  if (aliens.length === 0) {
+    console.log("You killed all the alien!!!");
+    gameWon();
+  }
+}
+
+function checkCollisionForCannon() {
+  for (let i = 0; i < lasers.length; i++) {
+    if (lasers[i].userData.type === 'alien') { // Ensure the laser is from an alien
+      const laserBox = new THREE.Box3().setFromObject(lasers[i]);
+      const cannonBox = new THREE.Box3().setFromObject(cannon);
+      if (laserBox.intersectsBox(cannonBox)) {
+        console.log("Cannon hit by alien laser!");
+        gameOver(); // Call the game over function
+        scene.remove(lasers[i]);
+        lasers.splice(i, 1);
+        break; // Exit the loop since game is over
+      }
+    }
   }
 }
 
